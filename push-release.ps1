@@ -1,10 +1,10 @@
 ﻿<#
 .SYNOPSIS
-    microsoft_office(배포 전용 리파지토리)의 변경 사항을 커밋하고 GitHub 에 push, 릴리스를 만듭니다.
+    mcp_office(배포 전용 리파지토리)의 변경 사항을 커밋하고 GitHub 에 push, 릴리스를 만듭니다.
 
 .DESCRIPTION
     release\<버전>\ 폴더 중 가장 최신 버전을 찾아 그 버전을 커밋 메시지와 태그(v<버전>)로 씁니다.
-    릴리스에는 설치기 mcp_microsoft_office.exe 와 서버 exe(mcp_*.exe)를 첨부합니다.
+    릴리스에는 설치기 mcp_office.exe 와 서버 exe(mcp_*.exe)를 첨부합니다.
     사용법: .\push-release.ps1 [-Message "메시지"] [-Tag] [-NoRelease] [-DryRun]
     (exe 는 먼저 src\build_installer.ps1 -RebuildServers 로 빌드해 release\<버전>\ 에 놓아야 합니다.)
 
@@ -60,7 +60,7 @@ if (-not $latest) {
 $version = $latest.Name
 
 # 첨부할 파일: 설치기 + 서버 exe. 설치기가 없으면 릴리스를 만들 수 없다.
-$installer = Join-Path $latest.FullName 'mcp_microsoft_office.exe'
+$installer = Join-Path $latest.FullName 'mcp_office.exe'
 if (-not (Test-Path -LiteralPath $installer)) {
     throw "설치기가 없습니다: $installer (src\build_installer.ps1 로 만드세요)"
 }
@@ -98,10 +98,10 @@ if ($doRelease) {
     $histBody = if ($hist.Success) { $hist.Groups[1].Value } else { '' }
     $m = [regex]::Match($histBody, "(?ms)^###\s+v?$([regex]::Escape($version))(?=[ \t(]|\r?$)[^\r\n]*\r?\n(.*?)(?=^###\s|\z)")
     $changes = if ($m.Success) { $m.Groups[1].Value.Trim() } else { '' }
-    if (-not $changes) { $changes = "mcp_microsoft_office $version 릴리스" }
+    if (-not $changes) { $changes = "mcp_office $version 릴리스" }
 
     $notes = "### What's Changed`n`n$changes`n`n---`n" +
-        "> 설치하려면 아래 **Assets** 의 ``mcp_microsoft_office.exe`` 를 받아 실행하세요. " +
+        "> 설치하려면 아래 **Assets** 의 ``mcp_office.exe`` 를 받아 실행하세요. " +
         "서버 exe(``mcp_*.exe``)는 설치기에 모두 들어 있으며 개별 사용을 위해 함께 올립니다. " +
         "``Source code (zip/tar.gz)`` 는 GitHub 이 자동 생성하는 스냅샷이며 실행 파일이 아닙니다."
 }
@@ -137,7 +137,7 @@ if ($doRelease) {
         throw "GitHub CLI(gh)가 필요합니다: https://cli.github.com/"
     }
     $repoSlug = ((git -C $releaseRepo remote get-url origin).Trim() -replace '\.git$', '') -replace '^.*github\.com[:/]', ''
-    $notesFile = Join-Path ([IO.Path]::GetTempPath()) "mcp_microsoft_office_notes_$version.md"
+    $notesFile = Join-Path ([IO.Path]::GetTempPath()) "mcp_office_notes_$version.md"
     [IO.File]::WriteAllText($notesFile, $notes, (New-Object Text.UTF8Encoding($false)))
 
     # gh 는 진행 상황/오류를 stderr 로 출력하므로 Stop 모드에서 예외가 되지 않게 종료 코드로만 판단한다.
