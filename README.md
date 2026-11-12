@@ -73,10 +73,8 @@ Microsoft Office(Excel/Word/PowerPoint/Outlook/OneNote/Visio)와 한컴오피스
 
 ### 0.10.0
 
-- 한컴오피스 한글(HWP) 서버(`hwp`) 추가: 문단·제목·표·그림·도형·수식, 필드, 각주·링크·책갈피, 머리말/꼬리말, 쪽 설정, PDF 내보내기
-- 한글 도구 AI 사용성 개선: 선택 값(도형 크기·위치)은 생략하면 적용하지 않음, 표 셀 분할 인자를 `split_rows`/`split_cols` 로 변경, 저장하지 않은 문서는 `save` 를 정해야 닫힘, `hwp_export_pdf` 의 `path` 생략 시 임시 폴더에 확인용 PDF 생성
-- 이름을 `mcp_office` 로 변경(설치기 `mcp_office.exe`, 저장소 `c0z0c-release/mcp_office`). 한글 포함으로 더 이상 Microsoft Office 전용이 아니기 때문
-- 설치기가 서버 8개를 설치
+- 한컴오피스 한글(HWP) 서버(`hwp`) 추가
+- 이름을 `mcp_office` 로 변경
 
 ### 0.9.0
 
