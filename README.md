@@ -74,7 +74,7 @@ Microsoft Office(Excel/Word/PowerPoint/Outlook/OneNote/Visio)와 한컴오피스
 ### 0.10.1
 
 - 불필요한 프로세서 낭비 방어
-- 10분 동안 요청이 없으면 서버가 스스로 종료(다음 호출 때 클라이언트가 다시 실행). `MCP_OFFICE_IDLE_MINUTES` 로 시간을 바꾸고 `0` 이면 끔
+- 10분 동안 요청이 없으면 서버가 스스로 종료(다음 호출 때 클라이언트가 다시 실행). 환경변수 `MCP_OFFICE_IDLE_MINUTES` 로 시간을 바꾸고 `0` 이면 끔
 - 서버를 띄운 클라이언트가 사라지면 서버도 함께 종료
 - 관리자 권한을 낮추는 보조 프로세스의 메모리 사용 감소
 
