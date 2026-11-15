@@ -5,7 +5,7 @@
 .DESCRIPTION
     release\<버전>\ 폴더 중 가장 최신 버전을 찾아 그 버전을 커밋 메시지와 태그(v<버전>)로 씁니다.
     릴리스에는 설치기 mcp_office.exe 와 서버 exe(mcp_*.exe)를 첨부합니다.
-    사용법: .\push-release.ps1 [-Message "메시지"] [-Tag] [-NoRelease] [-DryRun]
+    사용법: .\push-release.ps1 [-Message "메시지"] [-Tag] [-NoRelease] [-Draft] [-DryRun]
     (exe 는 먼저 src\build_installer.ps1 -RebuildServers 로 빌드해 release\<버전>\ 에 놓아야 합니다.)
 
 .PARAMETER Message
@@ -18,6 +18,10 @@
     기본 동작은 push 후 v<버전> 태그로 GitHub Releases 에 릴리스를 만들고 exe 를 첨부하는 것입니다.
     이 옵션을 주면 릴리스 생성을 건너뜁니다. 노트는 README.md '## 버전 히스토리' 의 '### <버전>' 항목에서 가져옵니다. (gh CLI 로그인 필요)
 
+.PARAMETER Draft
+    기본 동작은 릴리스를 바로 게시(Latest)하는 것입니다. 이 옵션을 주면 초안(Draft)으로만 올립니다.
+    초안으로 남은 같은 태그의 릴리스가 있으면 -Draft 없이 다시 실행할 때 빠진 파일을 올리고 게시합니다.
+
 .PARAMETER DryRun
     커밋/push/릴리스 없이 수행할 내용과 릴리스 노트 미리보기만 출력합니다.
 #>
@@ -26,6 +30,7 @@ param(
     [string]$Message,
     [switch]$Tag,
     [switch]$NoRelease,
+    [switch]$Draft,
     [switch]$DryRun
 )
 
@@ -34,8 +39,15 @@ $ErrorActionPreference = 'Stop'
 $releaseRepo = $PSScriptRoot
 $artifactDir = Join-Path $releaseRepo 'release'
 
+function Write-Cmd {
+    # 실행할 git/gh 명령줄을 먼저 출력한다. (공백이 든 인자는 따옴표로 감싼다)
+    $line = ($args | ForEach-Object { if ("$_" -match '\s') { "`"$_`"" } else { "$_" } }) -join ' '
+    Write-Host "> $line" -ForegroundColor DarkCyan
+}
+
 function Invoke-Git {
     # git 은 진행 상황을 stderr 로 출력하므로 종료 코드로만 실패를 판단한다.
+    Write-Cmd git -C $releaseRepo @args
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try { git -C $releaseRepo @args 2>&1 | ForEach-Object { "$_" } | Write-Host }
@@ -69,6 +81,7 @@ $assets = @(Get-Item -LiteralPath $installer) +
         Get-ChildItem $_.FullName -Filter 'mcp_*.exe' -File })
 
 if (-not $Message) { $Message = $version }
+Write-Cmd git -C $releaseRepo rev-parse --abbrev-ref HEAD
 $branch = (git -C $releaseRepo rev-parse --abbrev-ref HEAD).Trim()
 
 Write-Host "대상 리파지토리 : $releaseRepo"
@@ -78,6 +91,7 @@ Write-Host "첨부 파일       : $(($assets | ForEach-Object { $_.Name }) -join
 Write-Host "커밋 메시지     : $Message"
 
 Invoke-Git add -A
+Write-Cmd git -C $releaseRepo status --porcelain
 $pending = git -C $releaseRepo status --porcelain
 if ($pending) {
     Write-Host "`n변경 사항:"
@@ -120,6 +134,7 @@ if ($pending) {
 }
 
 if ($Tag -or $doRelease) {
+    Write-Cmd git -C $releaseRepo tag --list $tagName
     $existing = git -C $releaseRepo tag --list $tagName
     if ($existing) {
         Write-Host "태그 $tagName 이(가) 이미 있어 건너뜁니다."
@@ -136,6 +151,7 @@ if ($doRelease) {
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
         throw "GitHub CLI(gh)가 필요합니다: https://cli.github.com/"
     }
+    Write-Cmd git -C $releaseRepo remote get-url origin
     $repoSlug = ((git -C $releaseRepo remote get-url origin).Trim() -replace '\.git$', '') -replace '^.*github\.com[:/]', ''
     $notesFile = Join-Path ([IO.Path]::GetTempPath()) "mcp_office_notes_$version.md"
     [IO.File]::WriteAllText($notesFile, $notes, (New-Object Text.UTF8Encoding($false)))
@@ -144,12 +160,28 @@ if ($doRelease) {
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        gh release view $tagName --repo $repoSlug 2>&1 | Out-Null
+        Write-Cmd gh release view $tagName --repo $repoSlug --json isDraft --jq .isDraft
+        $isDraft = "$(gh release view $tagName --repo $repoSlug --json isDraft --jq .isDraft 2>&1)".Trim()
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "릴리스 $tagName 이(가) 이미 있어 건너뜁니다."
+            if ($isDraft -eq 'true' -and -not $Draft) {
+                # 이전 실행이 업로드 중 끊겨 초안으로 남은 릴리스: 빠진 파일을 채우고 게시한다.
+                Write-Host "릴리스 $tagName 이(가) 초안으로 남아 있어 파일을 올리고 게시합니다."
+                Write-Cmd gh release upload $tagName @($assets.FullName) --repo $repoSlug --clobber
+                gh release upload $tagName @($assets.FullName) --repo $repoSlug --clobber
+                if ($LASTEXITCODE -ne 0) { throw "gh release upload 실패 (exit $LASTEXITCODE)" }
+                Write-Cmd gh release edit $tagName --repo $repoSlug --draft=false --latest
+                gh release edit $tagName --repo $repoSlug --draft=false --latest
+                if ($LASTEXITCODE -ne 0) { throw "gh release edit 실패 (exit $LASTEXITCODE)" }
+            }
+            else {
+                Write-Host "릴리스 $tagName 이(가) 이미 있어 건너뜁니다."
+            }
         }
         else {
-            gh release create $tagName @($assets.FullName) --repo $repoSlug --title $tagName --notes-file $notesFile
+            # 기본은 바로 게시(Latest). -Draft 면 초안으로만 올린다.
+            $mode = if ($Draft) { '--draft' } else { '--latest' }
+            Write-Cmd gh release create $tagName @($assets.FullName) --repo $repoSlug --title $tagName --notes-file $notesFile $mode
+            gh release create $tagName @($assets.FullName) --repo $repoSlug --title $tagName --notes-file $notesFile $mode
             if ($LASTEXITCODE -ne 0) { throw "gh release create 실패 (exit $LASTEXITCODE)" }
         }
     }
